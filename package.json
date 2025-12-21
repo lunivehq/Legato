@@ -1,0 +1,52 @@
+{
+  "name": "legato",
+  "version": "1.0.0",
+  "description": "Legato - Discord Music Bot with Web Dashboard",
+  "main": "dist/bot/index.js",
+  "scripts": {
+    "dev:bot": "tsx watch src/bot/index.ts",
+    "dev:web": "next dev",
+    "dev": "concurrently \"pnpm run dev:bot\" \"pnpm run dev:web\"",
+    "build:bot": "tsc -p tsconfig.bot.json",
+    "build:web": "next build",
+    "build": "pnpm run build:bot && pnpm run build:web",
+    "start:bot": "node dist/bot/index.js",
+    "start:web": "next start",
+    "start": "concurrently \"pnpm run start:bot\" \"pnpm run start:web\"",
+    "lint": "eslint . --ext .ts,.tsx",
+    "deploy-commands": "tsx src/bot/deploy-commands.ts"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.9.0",
+    "@discordjs/voice": "^0.17.0",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "genius-lyrics": "^4.4.7",
+    "next": "^14.0.4",
+    "opusscript": "0.0.8",
+    "play-dl": "^1.9.7",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sodium-native": "^4.0.4",
+    "uuid": "^9.0.1",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "@types/uuid": "^9.0.7",
+    "@types/ws": "^8.5.10",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.0.4",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
