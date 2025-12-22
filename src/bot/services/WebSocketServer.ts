@@ -179,47 +179,50 @@ export class WebSocketServer {
 
     ws.sessionId = sessionId;
 
-    // Add to clients map
-    if (!this.clients.has(sessionId)) {
+    // Add to clients map - only set callbacks on first client connection
+    const isFirstClient = !this.clients.has(sessionId);
+    if (isFirstClient) {
       this.clients.set(sessionId, new Set());
     }
     this.clients.get(sessionId)!.add(ws);
 
-    // Set up session callbacks
-    this.sessionManager.setSessionCallbacks(sessionId, {
-      onQueueUpdate: (queue) => {
-        this.broadcastToSession(sessionId, {
-          type: "queue_update",
-          sessionId,
-          payload: { queue },
-          timestamp: Date.now(),
-        });
-      },
-      onTrackStart: (track) => {
-        this.broadcastToSession(sessionId, {
-          type: "track_update",
-          sessionId,
-          payload: { track, isPlaying: true },
-          timestamp: Date.now(),
-        });
-      },
-      onTrackEnd: () => {
-        this.broadcastToSession(sessionId, {
-          type: "track_update",
-          sessionId,
-          payload: { track: null, isPlaying: false },
-          timestamp: Date.now(),
-        });
-      },
-      onPositionUpdate: (position, duration) => {
-        this.broadcastToSession(sessionId, {
-          type: "position_update",
-          sessionId,
-          payload: { position, duration },
-          timestamp: Date.now(),
-        });
-      },
-    });
+    // Set up session callbacks only for the first client to avoid overwriting
+    if (isFirstClient) {
+      this.sessionManager.setSessionCallbacks(sessionId, {
+        onQueueUpdate: (queue) => {
+          this.broadcastToSession(sessionId, {
+            type: "queue_update",
+            sessionId,
+            payload: { queue },
+            timestamp: Date.now(),
+          });
+        },
+        onTrackStart: (track) => {
+          this.broadcastToSession(sessionId, {
+            type: "track_update",
+            sessionId,
+            payload: { track, isPlaying: true },
+            timestamp: Date.now(),
+          });
+        },
+        onTrackEnd: () => {
+          this.broadcastToSession(sessionId, {
+            type: "track_update",
+            sessionId,
+            payload: { track: null, isPlaying: false },
+            timestamp: Date.now(),
+          });
+        },
+        onPositionUpdate: (position, duration) => {
+          this.broadcastToSession(sessionId, {
+            type: "position_update",
+            sessionId,
+            payload: { position, duration },
+            timestamp: Date.now(),
+          });
+        },
+      });
+    }
 
     // Send session data
     this.send(ws, {

@@ -58,7 +58,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="absolute bottom-8 text-center text-legato-text-tertiary text-sm">
-        <p>© 2024 Legato</p>
+        <p>© 2025 Lunive</p>
       </footer>
     </main>
   );

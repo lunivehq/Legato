@@ -143,15 +143,18 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
         ws.close();
         return;
       }
-      console.log("WebSocket connected");
+      console.log("WebSocket connected for session:", sessionId);
       setIsConnected(true);
       reconnectAttemptsRef.current = 0;
 
-      // Send connect message
-      send({
-        type: "connect",
-        sessionId,
-      });
+      // Send connect message directly (not using send() to avoid stale closure)
+      ws.send(
+        JSON.stringify({
+          type: "connect",
+          sessionId,
+          timestamp: Date.now(),
+        })
+      );
     };
 
     ws.onmessage = (event) => {
