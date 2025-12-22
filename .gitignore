@@ -43,3 +43,9 @@ next-env.d.ts
 # Coverage
 coverage/
 .nyc_output/
+
+# Temporary files
+*-player-script.js
+
+# PM2 logs
+logs/

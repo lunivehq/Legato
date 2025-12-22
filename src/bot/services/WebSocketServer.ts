@@ -19,6 +19,7 @@ import { SearchService } from "./SearchService";
 interface WebSocketClient extends WebSocket {
   sessionId?: string;
   isAlive?: boolean;
+  lastActivity?: number;
 }
 
 export class WebSocketServer {
@@ -28,6 +29,9 @@ export class WebSocketServer {
   private lyricsService: LyricsService;
   private searchService: SearchService;
   private pingInterval: NodeJS.Timeout | null = null;
+  private readonly MAX_CLIENTS_PER_SESSION = 10;
+  private readonly PING_INTERVAL = 30000;
+  private readonly CLIENT_TIMEOUT = 60000;
 
   constructor(sessionManager: SessionManager) {
     this.sessionManager = sessionManager;
@@ -36,17 +40,24 @@ export class WebSocketServer {
   }
 
   start(port: number) {
-    this.wss = new WSServer({ port });
+    this.wss = new WSServer({
+      port,
+      perMessageDeflate: false, // Disable compression for lower latency
+      maxPayload: 1024 * 1024, // 1MB max message size
+    });
 
     this.wss.on("connection", (ws: WebSocketClient) => {
       ws.isAlive = true;
+      ws.lastActivity = Date.now();
 
       ws.on("pong", () => {
         ws.isAlive = true;
+        ws.lastActivity = Date.now();
       });
 
       ws.on("message", (data) => {
         try {
+          ws.lastActivity = Date.now();
           const message: WSMessage = JSON.parse(data.toString());
           this.handleMessage(ws, message);
         } catch (error) {
@@ -65,17 +76,21 @@ export class WebSocketServer {
       });
     });
 
-    // Heartbeat interval
+    // Heartbeat interval with cleanup
     this.pingInterval = setInterval(() => {
+      const now = Date.now();
       this.wss?.clients.forEach((ws: WebSocketClient) => {
-        if (ws.isAlive === false) {
+        if (
+          ws.isAlive === false ||
+          (ws.lastActivity && now - ws.lastActivity > this.CLIENT_TIMEOUT)
+        ) {
           ws.terminate();
           return;
         }
         ws.isAlive = false;
         ws.ping();
       });
-    }, 30000);
+    }, this.PING_INTERVAL);
 
     console.log(`🔌 WebSocket server started on port ${port}`);
   }
@@ -143,6 +158,22 @@ export class WebSocketServer {
 
     if (!session) {
       this.sendError(ws, "SESSION_NOT_FOUND", "세션을 찾을 수 없습니다.");
+      ws.close(4004, "Session not found");
+      return;
+    }
+
+    // Check max clients per session
+    const existingClients = this.clients.get(sessionId);
+    if (
+      existingClients &&
+      existingClients.size >= this.MAX_CLIENTS_PER_SESSION
+    ) {
+      this.sendError(
+        ws,
+        "MAX_CLIENTS_REACHED",
+        "세션 최대 연결 수에 도달했습니다."
+      );
+      ws.close(4003, "Max clients reached");
       return;
     }
 

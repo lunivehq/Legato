@@ -4,9 +4,7 @@ import { useParams } from "next/navigation";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { NowPlaying } from "@/components/NowPlaying";
 import { Queue } from "@/components/Queue";
-import { Search } from "@/components/Search";
 import { Lyrics } from "@/components/Lyrics";
-import { Sidebar } from "@/components/Sidebar";
 import { PlayerControls } from "@/components/PlayerControls";
 import { useState } from "react";
 
@@ -71,13 +69,6 @@ export default function SessionPage() {
 
       {/* Main Content */}
       <div className="flex flex-1 pb-24">
-        {/* Sidebar */}
-        <Sidebar
-          session={session}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
-
         {/* Main Area */}
         <main className="flex-1 flex">
           {/* Now Playing Section */}
@@ -99,13 +90,6 @@ export default function SessionPage() {
                 onPlay={actions.play}
                 onRemove={actions.removeTrack}
                 onReorder={actions.reorderQueue}
-              />
-            )}
-            {activeTab === "search" && (
-              <Search
-                results={searchResults}
-                onSearch={actions.search}
-                onAddTrack={actions.addTrack}
               />
             )}
             {activeTab === "lyrics" && (

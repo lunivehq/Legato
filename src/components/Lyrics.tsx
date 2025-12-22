@@ -1,7 +1,7 @@
 "use client";
 
 import { Track, LyricsData } from "@/shared/types";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface LyricsProps {
   lyrics: LyricsData | null;
@@ -10,11 +10,14 @@ interface LyricsProps {
 }
 
 export function Lyrics({ lyrics, track, onFetchLyrics }: LyricsProps) {
+  const lastFetchedTrackId = useRef<string | null>(null);
+
   useEffect(() => {
-    if (track && !lyrics) {
+    if (track && track.id !== lastFetchedTrackId.current) {
+      lastFetchedTrackId.current = track.id;
       onFetchLyrics(track.title, track.artist);
     }
-  }, [track?.id]);
+  }, [track, onFetchLyrics]);
 
   if (!track) {
     return (

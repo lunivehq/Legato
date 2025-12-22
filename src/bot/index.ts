@@ -158,5 +158,24 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
+process.on("SIGTERM", () => {
+  console.log("Received SIGTERM, shutting down gracefully...");
+  sessionManager.destroyAllSessions();
+  wsServer.close();
+  client.destroy();
+  process.exit(0);
+});
+
+// Handle uncaught errors to prevent crashes
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  // Continue running - the bot should be resilient
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // Continue running - the bot should be resilient
+});
+
 // Login to Discord
 client.login(process.env.DISCORD_TOKEN);

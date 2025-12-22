@@ -9,20 +9,24 @@ import {
   AudioResource,
   StreamType,
 } from "@discordjs/voice";
-import play from "play-dl";
-import { spawn, exec } from "child_process";
+import { spawn, exec, ChildProcess } from "child_process";
 import { promisify } from "util";
+import { randomUUID } from "crypto";
 import { Track, QueueState } from "../../shared/types";
 import { cleanYouTubeUrl } from "../../shared/utils";
-import { v4 as uuidv4 } from "uuid";
 
 const execPromise = promisify(exec);
+
+// Audio URL cache to reduce yt-dlp calls
+const audioUrlCache = new Map<string, { url: string; expires: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export class MusicPlayer {
   private audioPlayer: AudioPlayer;
   private connection: VoiceConnection;
   private queue: QueueState;
   private currentResource: AudioResource | null = null;
+  private currentFFmpegProcess: ChildProcess | null = null;
   private positionInterval: NodeJS.Timeout | null = null;
   private onQueueUpdate: (queue: QueueState) => void;
   private onTrackStart: (track: Track) => void;
@@ -30,6 +34,7 @@ export class MusicPlayer {
   private onPositionUpdate: (position: number, duration: number) => void;
   private startTime: number = 0;
   private pausedPosition: number = 0;
+  private isDestroyed: boolean = false;
 
   constructor(
     connection: VoiceConnection,
@@ -130,6 +135,49 @@ export class MusicPlayer {
     }
   }
 
+  private cleanupFFmpeg() {
+    if (this.currentFFmpegProcess) {
+      try {
+        this.currentFFmpegProcess.kill("SIGTERM");
+      } catch {
+        // Process may already be dead
+      }
+      this.currentFFmpegProcess = null;
+    }
+  }
+
+  private async getAudioUrl(videoUrl: string): Promise<string | null> {
+    // Check cache first
+    const cached = audioUrlCache.get(videoUrl);
+    if (cached && cached.expires > Date.now()) {
+      console.log("Using cached audio URL");
+      return cached.url;
+    }
+
+    try {
+      const { stdout } = await execPromise(
+        `yt-dlp --format bestaudio --get-url --no-warnings --no-call-home --socket-timeout 10 "${videoUrl}"`,
+        { timeout: 15000 }
+      );
+
+      const audioUrl = stdout.trim();
+      if (audioUrl) {
+        // Cache the URL
+        audioUrlCache.set(videoUrl, {
+          url: audioUrl,
+          expires: Date.now() + CACHE_DURATION,
+        });
+        return audioUrl;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error getting audio URL:", error);
+      // Clear potentially stale cache entry
+      audioUrlCache.delete(videoUrl);
+      return null;
+    }
+  }
+
   private getCurrentPosition(): number {
     if (this.queue.isPaused) {
       return this.pausedPosition;
@@ -141,6 +189,9 @@ export class MusicPlayer {
     this.onTrackEnd();
     this.queue.position = 0;
     this.pausedPosition = 0;
+    this.cleanupFFmpeg();
+
+    if (this.isDestroyed) return;
 
     if (this.queue.repeatMode === "one") {
       // Repeat current track
@@ -176,33 +227,36 @@ export class MusicPlayer {
       const cleanedQuery = cleanYouTubeUrl(query);
       console.log(`Cleaned query: ${cleanedQuery}`);
 
-      // Check if it's a URL or search query
-      const validateResult = play.yt_validate(cleanedQuery);
+      // Check if it's a URL or search query using regex
+      const isVideoUrl = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/.test(
+        cleanedQuery
+      );
+      const isPlaylistUrl = /youtube\.com\/playlist\?list=/.test(cleanedQuery);
 
-      if (validateResult === "video") {
-        // It's a YouTube video URL
+      if (isVideoUrl && !isPlaylistUrl) {
+        // It's a YouTube video URL - get info via yt-dlp
         trackUrl = cleanedQuery;
-        const info = await play.video_info(cleanedQuery);
-        const videoDetails = info.video_details;
-        trackTitle = videoDetails.title || "Unknown Title";
-        trackArtist = videoDetails.channel?.name || "Unknown Artist";
-        trackDuration = videoDetails.durationInSec || 0;
-        trackThumbnail = videoDetails.thumbnails?.[0]?.url || "";
-      } else if (validateResult === "playlist") {
-        // Handle playlist
-        const playlist = await play.playlist_info(cleanedQuery);
-        const videos = await playlist.all_videos();
+        const info = await this.getVideoInfoWithYtDlp(cleanedQuery);
+        if (!info) {
+          return null;
+        }
+        trackTitle = info.title;
+        trackArtist = info.artist;
+        trackDuration = info.duration;
+        trackThumbnail = info.thumbnail;
+      } else if (isPlaylistUrl) {
+        // Handle playlist via yt-dlp
+        const videos = await this.getPlaylistWithYtDlp(cleanedQuery);
 
         for (const video of videos.slice(0, 50)) {
           // Limit to 50 tracks
-          const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
           const track: Track = {
-            id: uuidv4(),
-            title: video.title || "Unknown Title",
-            artist: video.channel?.name || "Unknown Artist",
-            duration: video.durationInSec || 0,
-            thumbnail: video.thumbnails?.[0]?.url || "",
-            url: videoUrl,
+            id: randomUUID(),
+            title: video.title,
+            artist: video.artist,
+            duration: video.duration,
+            thumbnail: video.thumbnail,
+            url: video.url,
             source: "youtube",
             requestedBy,
             requestedAt: new Date(),
@@ -219,21 +273,20 @@ export class MusicPlayer {
 
         return this.queue.tracks[this.queue.tracks.length - 1];
       } else {
-        // Search for the query (use original query for search, not cleaned URL)
-        const searched = await play.search(cleanedQuery, { limit: 1 });
-        if (searched.length === 0) {
+        // Search for the query via yt-dlp
+        const searchResult = await this.searchWithYtDlp(cleanedQuery);
+        if (!searchResult) {
           return null;
         }
-        const firstResult = searched[0];
-        trackUrl = `https://www.youtube.com/watch?v=${firstResult.id}`;
-        trackTitle = firstResult.title || "Unknown Title";
-        trackArtist = firstResult.channel?.name || "Unknown Artist";
-        trackDuration = firstResult.durationInSec || 0;
-        trackThumbnail = firstResult.thumbnails?.[0]?.url || "";
+        trackUrl = searchResult.url;
+        trackTitle = searchResult.title;
+        trackArtist = searchResult.artist;
+        trackDuration = searchResult.duration;
+        trackThumbnail = searchResult.thumbnail;
       }
 
       const track: Track = {
-        id: uuidv4(),
+        id: randomUUID(),
         title: trackTitle,
         artist: trackArtist,
         duration: trackDuration,
@@ -272,29 +325,67 @@ export class MusicPlayer {
       return false;
     }
 
+    if (this.isDestroyed) return false;
+
     console.log(`Playing track: ${track.title} - URL: ${track.url}`);
 
     try {
-      // Use system yt-dlp to get direct audio URL
-      const { stdout } = await execPromise(
-        `yt-dlp --format bestaudio --get-url --no-warnings --no-call-home "${track.url}"`
-      );
+      // Cleanup previous FFmpeg process
+      this.cleanupFFmpeg();
 
-      const audioUrl = stdout.trim();
+      // Get audio URL with caching
+      const audioUrl = await this.getAudioUrl(track.url);
       if (!audioUrl) {
         throw new Error("Could not get audio URL from yt-dlp");
       }
 
       console.log("Got audio URL from yt-dlp");
 
-      // Use FFmpeg to stream the audio (volume controlled via inline volume)
+      // Use FFmpeg to stream the audio with optimized settings
       const ffmpeg = spawn(
         "ffmpeg",
-        ["-i", audioUrl, "-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1"],
+        [
+          "-reconnect",
+          "1",
+          "-reconnect_streamed",
+          "1",
+          "-reconnect_delay_max",
+          "5",
+          "-i",
+          audioUrl,
+          "-af",
+          "aresample=async=1,pan=stereo|c0=c0|c1=c1",
+          "-f",
+          "s16le",
+          "-ar",
+          "48000",
+          "-ac",
+          "2",
+          "-loglevel",
+          "error",
+          "pipe:1",
+        ],
         {
-          stdio: ["ignore", "pipe", "ignore"],
+          stdio: ["ignore", "pipe", "pipe"],
         }
       );
+
+      this.currentFFmpegProcess = ffmpeg;
+
+      // Handle FFmpeg errors
+      ffmpeg.stderr?.on("data", (data) => {
+        console.error("FFmpeg error:", data.toString());
+      });
+
+      ffmpeg.on("error", (error) => {
+        console.error("FFmpeg process error:", error);
+      });
+
+      ffmpeg.on("close", (code) => {
+        if (code !== 0 && code !== null && !this.isDestroyed) {
+          console.error(`FFmpeg exited with code ${code}`);
+        }
+      });
 
       this.currentResource = createAudioResource(ffmpeg.stdout, {
         inputType: StreamType.Raw,
@@ -385,36 +476,47 @@ export class MusicPlayer {
     }
 
     try {
-      // Use system yt-dlp to get direct audio URL
-      const { stdout } = await execPromise(
-        `yt-dlp --format bestaudio --get-url --no-warnings --no-call-home "${track.url}"`
-      );
+      // Cleanup previous FFmpeg process
+      this.cleanupFFmpeg();
 
-      const audioUrl = stdout.trim();
+      // Get audio URL with caching
+      const audioUrl = await this.getAudioUrl(track.url);
       if (!audioUrl) {
         throw new Error("Could not get audio URL");
       }
 
-      // Use FFmpeg to seek to position
+      // Use FFmpeg to seek to position with optimized settings
       const ffmpeg = spawn(
         "ffmpeg",
         [
           "-ss",
           position.toString(),
+          "-reconnect",
+          "1",
+          "-reconnect_streamed",
+          "1",
+          "-reconnect_delay_max",
+          "5",
           "-i",
           audioUrl,
+          "-af",
+          "aresample=async=1,pan=stereo|c0=c0|c1=c1",
           "-f",
           "s16le",
           "-ar",
           "48000",
           "-ac",
           "2",
+          "-loglevel",
+          "error",
           "pipe:1",
         ],
         {
-          stdio: ["ignore", "pipe", "ignore"],
+          stdio: ["ignore", "pipe", "pipe"],
         }
       );
+
+      this.currentFFmpegProcess = ffmpeg;
 
       this.currentResource = createAudioResource(ffmpeg.stdout, {
         inputType: StreamType.Raw,
@@ -546,9 +648,116 @@ export class MusicPlayer {
     return this.queue;
   }
 
+  // yt-dlp helper methods
+  private async getVideoInfoWithYtDlp(url: string): Promise<{
+    title: string;
+    artist: string;
+    duration: number;
+    thumbnail: string;
+  } | null> {
+    try {
+      const { stdout } = await execPromise(
+        `yt-dlp "${url}" --dump-json --no-warnings --no-download 2>/dev/null`,
+        { maxBuffer: 10 * 1024 * 1024 }
+      );
+      const data = JSON.parse(stdout);
+      return {
+        title: data.title || "Unknown Title",
+        artist: data.channel || data.uploader || "Unknown Artist",
+        duration: data.duration || 0,
+        thumbnail:
+          data.thumbnail || `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg`,
+      };
+    } catch (error) {
+      console.error("yt-dlp video info error:", error);
+      return null;
+    }
+  }
+
+  private async getPlaylistWithYtDlp(url: string): Promise<
+    Array<{
+      title: string;
+      artist: string;
+      duration: number;
+      thumbnail: string;
+      url: string;
+    }>
+  > {
+    try {
+      const { stdout } = await execPromise(
+        `yt-dlp "${url}" --flat-playlist --dump-json --no-warnings 2>/dev/null`,
+        { maxBuffer: 10 * 1024 * 1024 }
+      );
+      const results: Array<{
+        title: string;
+        artist: string;
+        duration: number;
+        thumbnail: string;
+        url: string;
+      }> = [];
+
+      const lines = stdout.trim().split("\n").filter(Boolean);
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line);
+          results.push({
+            title: data.title || "Unknown Title",
+            artist: data.channel || data.uploader || "Unknown Artist",
+            duration: data.duration || 0,
+            thumbnail:
+              data.thumbnail ||
+              `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg`,
+            url: `https://www.youtube.com/watch?v=${data.id}`,
+          });
+        } catch {
+          // Skip invalid JSON lines
+        }
+      }
+      return results;
+    } catch (error) {
+      console.error("yt-dlp playlist error:", error);
+      return [];
+    }
+  }
+
+  private async searchWithYtDlp(query: string): Promise<{
+    title: string;
+    artist: string;
+    duration: number;
+    thumbnail: string;
+    url: string;
+  } | null> {
+    try {
+      const escapedQuery = query.replace(/"/g, '\\"');
+      const { stdout } = await execPromise(
+        `yt-dlp "ytsearch1:${escapedQuery}" --flat-playlist --dump-json --no-warnings 2>/dev/null`,
+        { maxBuffer: 10 * 1024 * 1024 }
+      );
+
+      const data = JSON.parse(stdout.trim());
+      return {
+        title: data.title || "Unknown Title",
+        artist: data.channel || data.uploader || "Unknown Artist",
+        duration: data.duration || 0,
+        thumbnail:
+          data.thumbnail || `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg`,
+        url: `https://www.youtube.com/watch?v=${data.id}`,
+      };
+    } catch (error) {
+      console.error("yt-dlp search error:", error);
+      return null;
+    }
+  }
+
   destroy(): void {
+    this.isDestroyed = true;
     this.stopPositionUpdates();
+    this.cleanupFFmpeg();
     this.audioPlayer.stop();
-    this.connection.destroy();
+    try {
+      this.connection.destroy();
+    } catch {
+      // Connection may already be destroyed
+    }
   }
 }
