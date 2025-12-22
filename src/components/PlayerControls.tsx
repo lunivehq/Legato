@@ -56,11 +56,11 @@ export function PlayerControls({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 glass border-t border-apple-separator">
+    <div className="fixed bottom-0 left-0 right-0 glass border-t border-legato-separator">
       {/* Progress Bar */}
-      <div className="relative h-1 bg-apple-bg-tertiary group cursor-pointer">
+      <div className="relative h-1 bg-legato-bg-tertiary group cursor-pointer">
         <div
-          className="absolute left-0 top-0 h-full bg-apple-red transition-all"
+          className="absolute left-0 top-0 h-full bg-legato-primary transition-all"
           style={{ width: `${progress}%` }}
         />
         <input
@@ -91,13 +91,13 @@ export function PlayerControls({
               </div>
               <div className="min-w-0">
                 <h3 className="font-medium truncate">{track.title}</h3>
-                <p className="text-sm text-apple-text-secondary truncate">
+                <p className="text-sm text-legato-text-secondary truncate">
                   {track.artist}
                 </p>
               </div>
             </>
           ) : (
-            <div className="text-apple-text-secondary">재생 중인 음악 없음</div>
+            <div className="text-legato-text-secondary">재생 중인 음악 없음</div>
           )}
         </div>
 
@@ -109,8 +109,8 @@ export function PlayerControls({
               onClick={onShuffle}
               className={`p-2 transition-colors apple-button ${
                 shuffle
-                  ? "text-apple-red"
-                  : "text-apple-text-secondary hover:text-white"
+                  ? "text-legato-primary"
+                  : "text-legato-text-secondary hover:text-white"
               }`}
               disabled={!track}
             >
@@ -120,7 +120,7 @@ export function PlayerControls({
             {/* Previous */}
             <button
               onClick={onPrevious}
-              className="p-2 text-apple-text-secondary hover:text-white transition-colors apple-button"
+              className="p-2 text-legato-text-secondary hover:text-white transition-colors apple-button"
               disabled={!track}
             >
               <PreviousIcon className="w-6 h-6" />
@@ -142,7 +142,7 @@ export function PlayerControls({
             {/* Next */}
             <button
               onClick={onSkip}
-              className="p-2 text-apple-text-secondary hover:text-white transition-colors apple-button"
+              className="p-2 text-legato-text-secondary hover:text-white transition-colors apple-button"
               disabled={!track}
             >
               <NextIcon className="w-6 h-6" />
@@ -153,14 +153,14 @@ export function PlayerControls({
               onClick={handleRepeatClick}
               className={`p-2 transition-colors apple-button relative ${
                 repeatMode !== "off"
-                  ? "text-apple-red"
-                  : "text-apple-text-secondary hover:text-white"
+                  ? "text-legato-primary"
+                  : "text-legato-text-secondary hover:text-white"
               }`}
               disabled={!track}
             >
               <RepeatIcon className="w-5 h-5" />
               {repeatMode === "one" && (
-                <span className="absolute -top-1 -right-1 text-xs bg-apple-red text-white rounded-full w-4 h-4 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 text-xs bg-legato-primary text-white rounded-full w-4 h-4 flex items-center justify-center">
                   1
                 </span>
               )}
@@ -168,7 +168,7 @@ export function PlayerControls({
           </div>
 
           {/* Time Display */}
-          <div className="flex items-center gap-2 text-xs text-apple-text-secondary">
+          <div className="flex items-center gap-2 text-xs text-legato-text-secondary">
             <span>{formatDuration(position)}</span>
             <span>/</span>
             <span>{track ? formatDuration(track.duration) : "0:00"}</span>
@@ -177,14 +177,14 @@ export function PlayerControls({
 
         {/* Volume & Other Controls */}
         <div className="flex items-center gap-4 w-1/4 justify-end">
-          <VolumeIcon className="w-5 h-5 text-apple-text-secondary" />
+          <VolumeIcon className="w-5 h-5 text-legato-text-secondary" />
           <input
             type="range"
             min="0"
             max="100"
             value={volume}
             onChange={(e) => onVolumeChange(parseInt(e.target.value))}
-            className="w-24 accent-apple-red"
+            className="w-24 accent-legato-primary"
             style={{ "--progress": `${volume}%` } as React.CSSProperties}
           />
         </div>

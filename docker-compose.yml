@@ -1,0 +1,58 @@
+services:
+  legato:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: legato
+    restart: unless-stopped
+    expose:
+      - "3000"
+      - "3001"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+    volumes:
+      - legato_cache:/app/.cache
+    networks:
+      - legato_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  nginx:
+    image: nginx:alpine
+    container_name: legato-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+    networks:
+      - legato_network
+    depends_on:
+      - legato
+
+  # Certbot for SSL (run once to get certificate)
+  certbot:
+    image: certbot/certbot
+    container_name: legato-certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+networks:
+  legato_network:
+    driver: bridge
+
+volumes:
+  legato_cache:

@@ -6,9 +6,9 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Legato - Discord Music Bot",
-  description: "Apple Music inspired Discord Music Bot Dashboard",
+  description: "Premium Discord Music Bot Dashboard",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/favicon.svg",
   },
 };
 
@@ -20,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body
-        className={`${inter.className} bg-apple-bg-primary text-apple-text-primary`}
+        className={`${inter.className} bg-legato-bg-primary text-legato-text-primary`}
       >
         {children}
       </body>

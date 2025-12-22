@@ -47,9 +47,9 @@ export function Queue({
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-apple-separator">
+      <div className="px-6 py-4 border-b border-legato-separator">
         <h2 className="text-lg font-bold">재생 대기열</h2>
-        <p className="text-sm text-apple-text-secondary">
+        <p className="text-sm text-legato-text-secondary">
           {tracks.length}곡 • {currentIndex + 1}번째 재생 중
         </p>
       </div>
@@ -58,17 +58,17 @@ export function Queue({
       <div className="flex-1 overflow-y-auto">
         {tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-            <div className="w-20 h-20 rounded-full bg-apple-bg-tertiary flex items-center justify-center mb-4">
+            <div className="w-20 h-20 rounded-full bg-legato-bg-tertiary flex items-center justify-center mb-4">
               <svg
-                className="w-10 h-10 text-apple-text-tertiary"
+                className="w-10 h-10 text-legato-text-tertiary"
                 viewBox="0 0 24 24"
                 fill="currentColor"
               >
                 <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
               </svg>
             </div>
-            <p className="text-apple-text-secondary">대기열이 비어 있습니다</p>
-            <p className="text-sm text-apple-text-tertiary mt-1">
+            <p className="text-legato-text-secondary">대기열이 비어 있습니다</p>
+            <p className="text-sm text-legato-text-tertiary mt-1">
               검색하여 음악을 추가하세요
             </p>
           </div>
@@ -85,13 +85,13 @@ export function Queue({
                   flex items-center gap-3 p-3 rounded-xl transition-all cursor-grab
                   ${
                     index === currentIndex
-                      ? "bg-apple-red/20"
-                      : "hover:bg-apple-bg-tertiary"
+                      ? "bg-legato-primary/20"
+                      : "hover:bg-legato-bg-tertiary"
                   }
                   ${draggedIndex === index ? "opacity-50" : ""}
                   ${
                     dragOverIndex === index && draggedIndex !== index
-                      ? "border-t-2 border-apple-red"
+                      ? "border-t-2 border-legato-primary"
                       : ""
                   }
                 `}
@@ -102,20 +102,20 @@ export function Queue({
                   {index === currentIndex ? (
                     <div className="flex items-end justify-center gap-0.5 h-4">
                       <div
-                        className="w-0.5 bg-apple-red visualizer-bar"
+                        className="w-0.5 bg-legato-primary visualizer-bar"
                         style={{ height: "60%" }}
                       />
                       <div
-                        className="w-0.5 bg-apple-red visualizer-bar"
+                        className="w-0.5 bg-legato-primary visualizer-bar"
                         style={{ height: "100%" }}
                       />
                       <div
-                        className="w-0.5 bg-apple-red visualizer-bar"
+                        className="w-0.5 bg-legato-primary visualizer-bar"
                         style={{ height: "40%" }}
                       />
                     </div>
                   ) : (
-                    <span className="text-sm text-apple-text-secondary">
+                    <span className="text-sm text-legato-text-secondary">
                       {index + 1}
                     </span>
                   )}
@@ -136,18 +136,18 @@ export function Queue({
                 <div className="flex-1 min-w-0">
                   <h3
                     className={`font-medium truncate ${
-                      index === currentIndex ? "text-apple-red" : ""
+                      index === currentIndex ? "text-legato-primary" : ""
                     }`}
                   >
                     {track.title}
                   </h3>
-                  <p className="text-sm text-apple-text-secondary truncate">
+                  <p className="text-sm text-legato-text-secondary truncate">
                     {track.artist}
                   </p>
                 </div>
 
                 {/* Duration */}
-                <span className="text-sm text-apple-text-secondary flex-shrink-0">
+                <span className="text-sm text-legato-text-secondary flex-shrink-0">
                   {formatDuration(track.duration)}
                 </span>
 
@@ -158,7 +158,7 @@ export function Queue({
                       e.stopPropagation();
                       onRemove(track.id);
                     }}
-                    className="p-2 text-apple-text-tertiary hover:text-apple-red transition-colors opacity-0 group-hover:opacity-100"
+                    className="p-2 text-legato-text-tertiary hover:text-legato-primary transition-colors opacity-0 group-hover:opacity-100"
                   >
                     <svg
                       className="w-4 h-4"

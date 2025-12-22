@@ -1,8 +1,4 @@
 import { LyricsData } from "../../shared/types";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execPromise = promisify(exec);
 
 // Simple in-memory cache for lyrics
 const lyricsCache = new Map<string, { data: LyricsData; expires: number }>();
@@ -10,7 +6,7 @@ const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 
 export class LyricsService {
   constructor() {
-    console.log("LyricsService initialized (web search mode)");
+    console.log("LyricsService initialized (multi-source mode)");
   }
 
   async getLyrics(title: string, artist: string): Promise<LyricsData | null> {
@@ -19,6 +15,7 @@ export class LyricsService {
       const cacheKey = `${title.toLowerCase()}-${artist.toLowerCase()}`;
       const cached = lyricsCache.get(cacheKey);
       if (cached && cached.expires > Date.now()) {
+        console.log("Lyrics found in cache");
         return cached.data;
       }
 
@@ -26,11 +23,65 @@ export class LyricsService {
       const cleanTitle = this.cleanTitle(title);
       const cleanArtist = this.cleanArtist(artist);
 
-      // Try multiple sources
-      let lyricsData = await this.fetchFromGeniusWeb(cleanTitle, cleanArtist);
+      console.log(`Fetching lyrics for: "${cleanTitle}" by "${cleanArtist}"`);
 
+      // Try multiple sources in order of reliability
+      let lyricsData: LyricsData | null = null;
+
+      // 1. Try Lyrics.ovh (most reliable free API)
+      lyricsData = await this.fetchFromLyricsOvh(cleanTitle, cleanArtist);
+      if (lyricsData) {
+        console.log("Found lyrics from Lyrics.ovh");
+      }
+
+      // 2. Try Lyrist
       if (!lyricsData) {
-        lyricsData = await this.fetchFromAZLyrics(cleanTitle, cleanArtist);
+        lyricsData = await this.fetchFromLyrist(cleanTitle, cleanArtist);
+        if (lyricsData) {
+          console.log("Found lyrics from Lyrist");
+        }
+      }
+
+      // 3. Try with simplified title (remove featuring artists, etc.)
+      if (!lyricsData) {
+        const simplifiedTitle = this.simplifyTitle(cleanTitle);
+        const simplifiedArtist = this.simplifyArtist(cleanArtist);
+
+        if (
+          simplifiedTitle !== cleanTitle ||
+          simplifiedArtist !== cleanArtist
+        ) {
+          console.log(
+            `Retrying with simplified: "${simplifiedTitle}" by "${simplifiedArtist}"`
+          );
+
+          lyricsData = await this.fetchFromLyricsOvh(
+            simplifiedTitle,
+            simplifiedArtist
+          );
+          if (!lyricsData) {
+            lyricsData = await this.fetchFromLyrist(
+              simplifiedTitle,
+              simplifiedArtist
+            );
+          }
+        }
+      }
+
+      // 4. Try LRClib (for synced lyrics)
+      if (!lyricsData) {
+        lyricsData = await this.fetchFromLrclib(cleanTitle, cleanArtist);
+        if (lyricsData) {
+          console.log("Found lyrics from LRClib");
+        }
+      }
+
+      // 5. Try with just title search
+      if (!lyricsData) {
+        lyricsData = await this.fetchFromLrclib(cleanTitle, "");
+        if (lyricsData) {
+          console.log("Found lyrics from LRClib (title only)");
+        }
       }
 
       if (lyricsData) {
@@ -39,6 +90,8 @@ export class LyricsService {
           data: lyricsData,
           expires: Date.now() + CACHE_DURATION,
         });
+      } else {
+        console.log("Lyrics not found from any source");
       }
 
       return lyricsData;
@@ -48,125 +101,184 @@ export class LyricsService {
     }
   }
 
-  private async fetchFromGeniusWeb(
+  private async fetchFromLyricsOvh(
     title: string,
     artist: string
   ): Promise<LyricsData | null> {
     try {
-      const searchQuery = encodeURIComponent(
-        `${title} ${artist} lyrics site:genius.com`
-      );
+      const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(
+        artist
+      )}/${encodeURIComponent(title)}`;
 
-      // Use curl to search and get the first Genius result
-      const { stdout: searchResult } = await execPromise(
-        `curl -s "https://html.duckduckgo.com/html/?q=${searchQuery}" | grep -oP 'https://genius\\.com/[^"]+' | head -1`,
-        { timeout: 10000 }
-      );
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
 
-      const geniusUrl = searchResult.trim();
-      if (!geniusUrl || !geniusUrl.includes("genius.com")) {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Legato/1.0)",
+        },
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
         return null;
       }
 
-      // Fetch the Genius page and extract lyrics
-      const { stdout: pageContent } = await execPromise(
-        `curl -s "${geniusUrl}" | grep -oP '(?<=<div data-lyrics-container="true"[^>]*>).*?(?=</div>)' | head -50`,
-        { timeout: 10000 }
-      );
+      const data = (await response.json()) as { lyrics?: string };
 
-      if (!pageContent) {
-        return null;
-      }
-
-      // Clean HTML tags and decode entities
-      const lyrics = this.cleanHtmlLyrics(pageContent);
-
-      if (!lyrics || lyrics.length < 50) {
+      if (!data.lyrics || data.lyrics.length < 30) {
         return null;
       }
 
       return {
         title: title,
         artist: artist,
-        lyrics: lyrics,
-        source: "Genius",
-        url: geniusUrl,
+        lyrics: data.lyrics.trim(),
+        source: "Lyrics.ovh",
       };
     } catch (error) {
-      console.error("Genius web fetch error:", error);
+      // Silently fail, will try next source
       return null;
     }
   }
 
-  private async fetchFromAZLyrics(
+  private async fetchFromLyrist(
     title: string,
     artist: string
   ): Promise<LyricsData | null> {
     try {
-      // Format for AZLyrics URL pattern
-      const cleanArtist = artist.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const azUrl = `https://www.azlyrics.com/lyrics/${cleanArtist}/${cleanTitle}.html`;
+      const url = `https://lyrist.vercel.app/api/${encodeURIComponent(
+        title
+      )}/${encodeURIComponent(artist)}`;
 
-      const { stdout: pageContent } = await execPromise(
-        `curl -s -A "Mozilla/5.0" "${azUrl}"`,
-        { timeout: 10000 }
-      );
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
 
-      if (
-        !pageContent ||
-        pageContent.includes("404") ||
-        pageContent.includes("not found")
-      ) {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Legato/1.0)",
+        },
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
         return null;
       }
 
-      // Extract lyrics from AZLyrics page format
-      const lyricsMatch = pageContent.match(
-        /<!-- Usage of azlyrics\.com content.*?-->([\s\S]*?)<!-- MxM banner -->/
-      );
+      const data = (await response.json()) as {
+        lyrics?: string;
+        title?: string;
+        artist?: string;
+        image?: string;
+      };
 
-      if (!lyricsMatch || !lyricsMatch[1]) {
-        return null;
-      }
-
-      const lyrics = this.cleanHtmlLyrics(lyricsMatch[1]);
-
-      if (!lyrics || lyrics.length < 50) {
+      if (!data.lyrics || data.lyrics.length < 30) {
         return null;
       }
 
       return {
-        title: title,
-        artist: artist,
-        lyrics: lyrics,
-        source: "AZLyrics",
-        url: azUrl,
+        title: data.title || title,
+        artist: data.artist || artist,
+        lyrics: data.lyrics.trim(),
+        source: "Lyrist",
+        url: data.image,
       };
     } catch (error) {
-      console.error("AZLyrics fetch error:", error);
       return null;
     }
   }
 
-  private cleanHtmlLyrics(html: string): string {
+  private async fetchFromLrclib(
+    title: string,
+    artist: string
+  ): Promise<LyricsData | null> {
+    try {
+      // LRClib - free synced lyrics API
+      const params = new URLSearchParams();
+      params.set("track_name", title);
+      if (artist) {
+        params.set("artist_name", artist);
+      }
+
+      const url = `https://lrclib.net/api/search?${params.toString()}`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Legato/1.0)",
+        },
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const results = (await response.json()) as Array<{
+        trackName?: string;
+        artistName?: string;
+        plainLyrics?: string;
+        syncedLyrics?: string;
+      }>;
+
+      if (!results || results.length === 0) {
+        return null;
+      }
+
+      // Get the first result with lyrics
+      const result = results.find((r) => r.plainLyrics || r.syncedLyrics);
+      if (!result) {
+        return null;
+      }
+
+      // Prefer plain lyrics, fall back to synced (removing timestamps)
+      let lyrics = result.plainLyrics;
+      if (!lyrics && result.syncedLyrics) {
+        // Remove LRC timestamps like [00:12.34]
+        lyrics = result.syncedLyrics
+          .replace(/\[\d{2}:\d{2}\.\d{2,3}\]/g, "")
+          .trim();
+      }
+
+      if (!lyrics || lyrics.length < 30) {
+        return null;
+      }
+
+      return {
+        title: result.trackName || title,
+        artist: result.artistName || artist,
+        lyrics: lyrics.trim(),
+        source: "LRClib",
+      };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private simplifyTitle(title: string): string {
     return (
-      html
-        // Remove HTML tags
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/<[^>]+>/g, "")
-        // Decode common HTML entities
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, " ")
-        .replace(/&#x27;/g, "'")
-        .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num)))
-        // Clean up whitespace
-        .replace(/\r\n/g, "\n")
-        .replace(/\n{3,}/g, "\n\n")
+      title
+        // Remove everything after common separators
+        .split(/[-–—]/)[0]
+        .replace(/\s+/g, " ")
+        .trim()
+    );
+  }
+
+  private simplifyArtist(artist: string): string {
+    return (
+      artist
+        // Take only the first artist if multiple
+        .split(/[,&×x]/i)[0]
+        .replace(/\s+/g, " ")
         .trim()
     );
   }
@@ -179,17 +291,23 @@ export class LyricsService {
       .replace(/\(Audio.*?\)/gi, "")
       .replace(/\(Video.*?\)/gi, "")
       .replace(/\(Lyrics\)/gi, "")
+      .replace(/\(MV\)/gi, "")
+      .replace(/\(M\/V\)/gi, "")
       .replace(/\[Official.*?\]/gi, "")
       .replace(/\[Music.*?\]/gi, "")
       .replace(/\[Lyric.*?\]/gi, "")
       .replace(/\[Audio.*?\]/gi, "")
       .replace(/\[Video.*?\]/gi, "")
+      .replace(/\[MV\]/gi, "")
       .replace(/\|.*$/g, "")
-      .replace(/ft\..*/gi, "")
-      .replace(/feat\..*/gi, "")
+      .replace(/ft\.\s*.*/gi, "")
+      .replace(/feat\.\s*.*/gi, "")
       .replace(/\(ft\..*?\)/gi, "")
       .replace(/\(feat\..*?\)/gi, "")
       .replace(/-\s*Topic$/gi, "")
+      .replace(/\s*\(.*?\)\s*$/g, "") // Remove trailing parentheses
+      .replace(/\s*\[.*?\]\s*$/g, "") // Remove trailing brackets
+      .replace(/\s+/g, " ")
       .trim();
   }
 
@@ -198,6 +316,8 @@ export class LyricsService {
       .replace(/- Topic$/gi, "")
       .replace(/VEVO$/gi, "")
       .replace(/Official$/gi, "")
+      .replace(/\s*\(.*?\)\s*/g, "") // Remove parentheses content
+      .replace(/\s+/g, " ")
       .trim();
   }
 }

@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --apple-red: #fa2d48;
-  --apple-pink: #fc3c57;
+  --legato-primary: #3b82f6;
+  --legato-secondary: #60a5fa;
 }
 
 * {
@@ -53,8 +53,8 @@ input[type="range"]::-webkit-slider-runnable-track {
   border-radius: 2px;
   background: linear-gradient(
     to right,
-    var(--apple-red) var(--progress),
-    #3a3a3c var(--progress)
+    var(--legato-primary) var(--progress),
+    #333333 var(--progress)
   );
 }
 
@@ -85,21 +85,21 @@ input[type="range"]:hover::-webkit-slider-thumb {
 .gradient-bg {
   background: linear-gradient(
     135deg,
-    rgba(250, 45, 72, 0.3) 0%,
+    rgba(59, 130, 246, 0.3) 0%,
     rgba(0, 0, 0, 0) 50%
   );
 }
 
-/* Apple Music-like button hover effect */
-.apple-button {
+/* Legato button hover effect */
+.legato-button {
   @apply transition-all duration-200 ease-out;
 }
 
-.apple-button:hover {
+.legato-button:hover {
   @apply scale-105;
 }
 
-.apple-button:active {
+.legato-button:active {
   @apply scale-95;
 }
 
@@ -159,6 +159,28 @@ input[type="range"]:hover::-webkit-slider-thumb {
     black 90%,
     transparent 100%
   );
+}
+
+.lyrics-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.lyrics-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lyrics-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lyrics-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.lyrics-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Album art reflection */

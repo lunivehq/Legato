@@ -7,21 +7,22 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Apple Music inspired colors
-        "apple-red": "#FA2D48",
-        "apple-pink": "#FC3C57",
-        "apple-bg": {
-          primary: "#000000",
-          secondary: "#1C1C1E",
-          tertiary: "#2C2C2E",
-          elevated: "#3A3A3C",
+        // Legato theme colors (Blue gradient)
+        "legato-primary": "#3B82F6",
+        "legato-secondary": "#60A5FA",
+        "legato-accent": "#2563EB",
+        "legato-bg": {
+          primary: "#0F0F0F",
+          secondary: "#1A1A1A",
+          tertiary: "#252525",
+          elevated: "#333333",
         },
-        "apple-text": {
+        "legato-text": {
           primary: "#FFFFFF",
-          secondary: "#8E8E93",
-          tertiary: "#636366",
+          secondary: "#A1A1A6",
+          tertiary: "#6B6B70",
         },
-        "apple-separator": "#38383A",
+        "legato-separator": "#2A2A2A",
       },
       fontFamily: {
         sans: [

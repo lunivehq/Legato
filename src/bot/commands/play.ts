@@ -105,7 +105,7 @@ export const playCommand = {
 
     // Create embed
     const embed = new EmbedBuilder()
-      .setColor(0xfa2d48) // Apple Music Red
+      .setColor(0x3b82f6) // Legato Blue
       .setTitle("🎵 Legato Music Player")
       .setDescription("웹 대시보드에서 음악을 컨트롤하세요!")
       .addFields(
@@ -115,7 +115,7 @@ export const playCommand = {
         { name: "📱 대시보드", value: `[여기를 클릭하세요](${dashboardUrl})` }
       )
       .setThumbnail(interaction.client.user!.displayAvatarURL())
-      .setFooter({ text: "Legato • Apple Music inspired Discord Bot" })
+      .setFooter({ text: "Legato • Discord Bot" })
       .setTimestamp();
 
     // Create button for dashboard

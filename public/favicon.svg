@@ -3,8 +3,8 @@
   <path d="M16 6V20.55C15.41 20.21 14.73 20 14 20C11.79 20 10 21.79 10 24C10 26.21 11.79 28 14 28C16.21 28 18 26.21 18 24V12H22V6H16Z" fill="white"/>
   <defs>
     <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FA2D48"/>
-      <stop offset="1" stop-color="#FC3C57"/>
+      <stop stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#2563EB"/>
     </linearGradient>
   </defs>
 </svg>

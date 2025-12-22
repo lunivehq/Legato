@@ -6,7 +6,10 @@ import { promisify } from "util";
 const execPromise = promisify(exec);
 
 // Cache for search results to reduce yt-dlp calls
-const searchCache = new Map<string, { results: SearchResult[]; expires: number }>();
+const searchCache = new Map<
+  string,
+  { results: SearchResult[]; expires: number }
+>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export class SearchService {
@@ -99,10 +102,15 @@ export class SearchService {
       for (const line of lines) {
         try {
           const data = JSON.parse(line);
+          const artistInfo = this.extractArtistFromTitle(
+            data.title,
+            data.artist,
+            data.creator
+          );
           results.push({
             id: data.id || "",
-            title: data.title || "Unknown Title",
-            artist: data.channel || data.uploader || "Unknown Artist",
+            title: artistInfo.title,
+            artist: artistInfo.artist,
             duration: data.duration || 0,
             thumbnail:
               data.thumbnail ||
@@ -140,10 +148,15 @@ export class SearchService {
       for (const line of lines) {
         try {
           const data = JSON.parse(line);
+          const artistInfo = this.extractArtistFromTitle(
+            data.title,
+            data.artist,
+            data.creator
+          );
           results.push({
             id: data.id || "",
-            title: data.title || "Unknown Title",
-            artist: data.channel || data.uploader || "Unknown Artist",
+            title: artistInfo.title,
+            artist: artistInfo.artist,
             duration: data.duration || 0,
             thumbnail:
               data.thumbnail ||
@@ -184,5 +197,83 @@ export class SearchService {
       console.error("Error getting playlist info:", error);
       return [];
     }
+  }
+
+  /**
+   * Extract artist from video title using common patterns
+   * YouTube videos often have "Artist - Title" format
+   */
+  private extractArtistFromTitle(
+    title: string,
+    ytArtist?: string,
+    creator?: string
+  ): { title: string; artist: string } {
+    // If yt-dlp provided an artist field (rare but possible), use it
+    if (ytArtist && ytArtist !== "Unknown Artist") {
+      return { title: title || "Unknown Title", artist: ytArtist };
+    }
+
+    // If creator field exists, it might be the actual artist
+    if (creator) {
+      return { title: title || "Unknown Title", artist: creator };
+    }
+
+    const originalTitle = title || "Unknown Title";
+
+    // Common patterns: "Artist - Song Title", "Artist | Song Title", "Artist「Song Title」"
+    const patterns = [
+      /^(.+?)\s*[-–—]\s*(.+)$/, // Artist - Title (most common)
+      /^(.+?)\s*\|\s*(.+)$/, // Artist | Title
+      /^(.+?)「(.+?)」/, // Artist「Title」(Japanese)
+      /^(.+?)\s*[：:]\s*(.+)$/, // Artist : Title
+    ];
+
+    for (const pattern of patterns) {
+      const match = originalTitle.match(pattern);
+      if (match) {
+        let potentialArtist = match[1].trim();
+        let potentialTitle = match[2].trim();
+
+        // Clean up common suffixes from artist name
+        potentialArtist = potentialArtist
+          .replace(
+            /\s*(Official|VEVO|Music|Records|Entertainment|Studios?|Channel|Topic)$/gi,
+            ""
+          )
+          .trim();
+
+        // Clean up common suffixes from title
+        potentialTitle = potentialTitle
+          .replace(/\s*\(Official.*?\)/gi, "")
+          .replace(/\s*\(Music.*?\)/gi, "")
+          .replace(/\s*\(Lyric.*?\)/gi, "")
+          .replace(/\s*\(Audio\)/gi, "")
+          .replace(/\s*\(MV\)/gi, "")
+          .replace(/\s*\(M\/V\)/gi, "")
+          .replace(/\s*\[Official.*?\]/gi, "")
+          .replace(/\s*\[MV\]/gi, "")
+          .replace(/\s*【.*?】/g, "")
+          .trim();
+
+        // Only use if both parts are reasonable length
+        if (
+          potentialArtist.length >= 1 &&
+          potentialArtist.length <= 50 &&
+          potentialTitle.length >= 1 &&
+          potentialTitle.length <= 100
+        ) {
+          return { title: potentialTitle, artist: potentialArtist };
+        }
+      }
+    }
+
+    // No pattern matched - try to extract from parentheses like "Title (by Artist)"
+    const byMatch = originalTitle.match(/(.+?)\s*\((?:by|from)\s+(.+?)\)/i);
+    if (byMatch) {
+      return { title: byMatch[1].trim(), artist: byMatch[2].trim() };
+    }
+
+    // Fallback: use the whole title as title, unknown artist
+    return { title: originalTitle, artist: "Unknown Artist" };
   }
 }

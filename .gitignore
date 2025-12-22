@@ -49,3 +49,25 @@ coverage/
 
 # PM2 logs
 logs/
+
+# SSL/TLS Certificates (SENSITIVE)
+certbot/
+nginx/ssl/
+*.pem
+*.key
+*.crt
+*.csr
+privkey*
+fullchain*
+chain*
+
+# Certbot accounts (contains private keys)
+letsencrypt/
+
+# Docker volumes data
+data/
+
+# Sensitive configuration
+*.p12
+*.pfx
+secrets/
