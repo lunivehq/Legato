@@ -341,10 +341,12 @@ export class MusicPlayer {
 
       console.log("Got audio URL from yt-dlp");
 
-      // Use FFmpeg to stream the audio with optimized settings
+      // Use FFmpeg to stream the audio with minimal processing for Discord
+      // Discord requires: 48kHz, stereo, 16-bit PCM (Opus encoded by discord.js)
       const ffmpeg = spawn(
         "ffmpeg",
         [
+          // Input options for network streaming stability
           "-reconnect",
           "1",
           "-reconnect_streamed",
@@ -353,8 +355,10 @@ export class MusicPlayer {
           "5",
           "-i",
           audioUrl,
-          "-af",
-          "aresample=async=1,pan=stereo|c0=c0|c1=c1",
+          // Disable video processing
+          "-vn",
+          // Minimal processing - just format conversion, no filters
+          // This preserves original dynamic range
           "-f",
           "s16le",
           "-ar",

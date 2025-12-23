@@ -517,9 +517,9 @@ export default function SessionPage() {
                     searchResults.map((result, index) => (
                       <motion.button
                         key={result.id || index}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.15 }}
                         onClick={() => handleAddTrack(result)}
                         className="w-full flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-xl hover:bg-white/10 transition-all group text-left"
                       >
@@ -689,13 +689,8 @@ export default function SessionPage() {
                       {lyrics.lyrics.split("\n\n").map((paragraph, pIndex) => (
                         <div key={pIndex}>
                           {paragraph.split("\n").map((line, lIndex) => (
-                            <motion.p
+                            <p
                               key={`${pIndex}-${lIndex}`}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{
-                                delay: (pIndex * 3 + lIndex) * 0.02,
-                              }}
                               className={`text-lg md:text-2xl leading-relaxed font-medium ${
                                 line.startsWith("[")
                                   ? "text-white/30 text-sm md:text-base uppercase tracking-wider mt-6 md:mt-8"
@@ -703,7 +698,7 @@ export default function SessionPage() {
                               }`}
                             >
                               {line || "\u00A0"}
-                            </motion.p>
+                            </p>
                           ))}
                         </div>
                       ))}
@@ -757,9 +752,9 @@ function QueueItem({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
       className={`flex items-center gap-4 p-4 rounded-xl transition-all group ${
         isCurrentTrack ? "bg-white/10" : "hover:bg-white/5"
       }`}
